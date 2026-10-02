@@ -1,0 +1,62 @@
+/*
+ * 2026-09-02-timerPWM.c
+ *
+ * Created: 02/09/2026 19:43:36
+ * Author : Pedro Biondo Soares
+ */ 
+
+#define F_CPU 16000000UL
+#include <avr/io.h>
+#include <avr/interrupt.h>
+
+
+#define lerBit(registrador, bit) ((registrador &= (1 << bit)) >> bit)
+#define ligaBit(registrador, bit) (registrador |= (1 << bit)) // Configura o pino PB1 como saída
+#define desligaBit(registrador, bit) (registrador &= ~(1 << bit)) // macro para desligar a saída
+#define invertBit(registrador, bit) (registrador ^= (1 << bit))
+
+
+#define led PD6
+
+uint16_t contagem = 0;
+
+/*----------prototipo das funções----------*/
+ISR(TIMER0_OVF_vect);
+void configuraTemporizador(void);
+/*-----------------------------------------*/
+
+int main(void)
+{
+	ligaBit(DDRD, led);
+	configuraTemporizador();
+	while (1)
+	{
+		
+	}
+}
+
+/*----------corpo das funções----------*/
+ISR(TIMER0_OVF_vect)
+{
+	static uint8_t duty = 6;
+	static uint16_t contagem = 0;
+	
+	contagem += 1;
+	if (contagem >= 1000) 
+	{
+		duty += 49;
+		if (duty >=246) duty =6;
+		contagem = 0;
+	}
+	OCR0A = duty;
+	TCNT0 = 6;
+}
+void configuraTemporizador(void)
+{
+	cli(); // Cancela as interrupções
+	TCCR0A = 0b10000011;
+	TCCR0B = 0b00000011;
+	TIMSK0 = 0b00000001;
+	OCR0A =           6;
+	sei(); //habilita as interrupções
+}
