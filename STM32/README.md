@@ -1,3 +1,3 @@
 ﻿# STM32
 
-Projetos de STM32.
+STM32 University Projects
