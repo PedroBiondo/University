@@ -17,3 +17,5 @@ Id,Name,Type,Address,Length,Comment
 10,M1,Bit,@plc0:0x7,1,Motor Misturador
 11,Lq1Quant,16Bit-UINT,@plc0:4x6,1,Quantidade Liquido 1
 12,Lq2Quant,16Bit-UINT,@plc0:4x7,1,Quantidade Liquido 2
+14,ST,Bit,@plc0:0x8,1,Start/Stop IHM
+15,TimeM,16Bit-UINT,@plc0:4x8,1,Tempo de Mistura
