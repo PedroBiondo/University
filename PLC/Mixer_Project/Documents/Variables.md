@@ -17,5 +17,7 @@
     </br>
     Lq1Quant -> Liquid 1 quantity in liters</br>
     Lq2Quant -> Liquid 2 quantity in liters</br>
-
+</br>
+    St       -> Machine Start and Stop</br>
+    TimeM    -> Mixing Time</br>
 
