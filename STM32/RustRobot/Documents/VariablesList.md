@@ -3,7 +3,7 @@
 
 ----> PWM Configuration
 -----------------------
-----> Timer1
+----> Timer1 - Counter Period: 10799
 --> Right Side 
 <
 Channel 1 -- Pin: PE9  Label: RSRPWM_CH1
