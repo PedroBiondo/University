@@ -1,10 +1,13 @@
-#   Variable List
+#  u 
+Variable List
 
     </br>// PARAMETERS (HMI -> PLC) - retained after power loss
+    </br>P1         : UINT;    // 4x1 (40001) - Pump 1 flow rate
+    </br>P2         : UINT;    // 4x2 (40002) - Pump 2 flow rate
     </br>Cheio      : UINT;    // 4x4 (40004) - Total capacity
     </br>Vazio      : UINT;    // 4x5 (40005) - Tank empty
     </br>Lq1Quant   : UINT;    // 4x6 (40006) - Liquid 1 quantity
-    </br>Lq2Quant   : UINT;    // 4x7 (40007) - Liquid 2 quantity
+    </br>Lq2Quant   : UINT;    // 4x7 (40007) - Liquid 2 quantityi
     </br>TimeM      : UINT;    // 4x8 (40008) - Mixing time
 
 </br>
@@ -26,6 +29,4 @@
 </br>
 
     </br>// PROCESS (PLC -> HMI)
-    </br>P1         : UINT;    // 4x1 (40001) - Pump 1 flow rate
-    </br>P2         : UINT;    // 4x2 (40002) - Pump 2 flow rate
     </br>Nivel      : UINT;    // 4x3 (40003) - Liquid level in tank

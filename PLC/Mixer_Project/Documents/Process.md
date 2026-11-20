@@ -1,9 +1,24 @@
 
 # MACHINE STATES // PROCESS
 
+><---- IMPORTANT ----><
+--->That`s just a document about the process, so the variables
+that are presented here are just the ones that`s going to get 
+changed and used during the process.
+    And the configuration variables needs to be set during
+the STATE 1, for good practices, please set the configuration
+variables :
+Cheio : UINT; // 4x4 - Total capacity
+P1    : UINT; // 4x1 - Pump 1 flow rate
+P2    : UINT; // 4x2 - Pump 2 flow rate
+>
+
 ----> STATE 1 : GATHERING INFORMATION
---> In that part of the process we will get the process set.
+--- In that part of the process we will get the process set.
 So the machine will be stopped and accepting the setup.
+
+--> Variables to be written:
+    
 
 ----> STATE 2 : FILLING UP THE TANK
 --> After the start being pressed, the variables will writen 
