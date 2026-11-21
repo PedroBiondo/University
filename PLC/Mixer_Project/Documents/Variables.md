@@ -25,6 +25,7 @@ Variable List
     </br>B2         : BOOL;    // 0x5 (00005) - Liquid 2 pump
     </br>B3         : BOOL;    // 0x6 (00006) - Liquid 3 pump - mixture
     </br>M1         : BOOL;    // 0x7 (00007) - Mixer motor
+    </br>S1         : BOOL;    // not added yet - Level0 Sensor
 
 </br>
 
