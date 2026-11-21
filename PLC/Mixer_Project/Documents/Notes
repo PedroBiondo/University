@@ -1,0 +1,13 @@
+
+# SOME NOTES
+
+What to check:
+Check the process: go step by step reading line by line and seeing the functionality
+Check the variables
+check the atches
+check the stops
+check if there is nothing missing
+check the hmi comunnication
+put the sensor draw in the HMI desing
+If we have time add alerts
+
