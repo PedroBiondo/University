@@ -79,6 +79,98 @@ void HAL_MspInit(void)
 }
 
 /**
+  * @brief ADC MSP Initialization
+  * This function configures the hardware resources used in this example
+  * @param hadc: ADC handle pointer
+  * @retval None
+  */
+void HAL_ADC_MspInit(ADC_HandleTypeDef* hadc)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  if(hadc->Instance==ADC3)
+  {
+    /* USER CODE BEGIN ADC3_MspInit 0 */
+
+    /* USER CODE END ADC3_MspInit 0 */
+    /* Peripheral clock enable */
+    __HAL_RCC_ADC3_CLK_ENABLE();
+
+    __HAL_RCC_GPIOF_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    /**ADC3 GPIO Configuration
+    PF3     ------> ADC3_IN9
+    PF4     ------> ADC3_IN14
+    PF5     ------> ADC3_IN15
+    PF10     ------> ADC3_IN8
+    PC0     ------> ADC3_IN10
+    PC2     ------> ADC3_IN12
+    PC3     ------> ADC3_IN13
+    PA3     ------> ADC3_IN3
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_10;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_2|GPIO_PIN_3;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_3;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    /* USER CODE BEGIN ADC3_MspInit 1 */
+
+    /* USER CODE END ADC3_MspInit 1 */
+
+  }
+
+}
+
+/**
+  * @brief ADC MSP De-Initialization
+  * This function freeze the hardware resources used in this example
+  * @param hadc: ADC handle pointer
+  * @retval None
+  */
+void HAL_ADC_MspDeInit(ADC_HandleTypeDef* hadc)
+{
+  if(hadc->Instance==ADC3)
+  {
+    /* USER CODE BEGIN ADC3_MspDeInit 0 */
+
+    /* USER CODE END ADC3_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_ADC3_CLK_DISABLE();
+
+    /**ADC3 GPIO Configuration
+    PF3     ------> ADC3_IN9
+    PF4     ------> ADC3_IN14
+    PF5     ------> ADC3_IN15
+    PF10     ------> ADC3_IN8
+    PC0     ------> ADC3_IN10
+    PC2     ------> ADC3_IN12
+    PC3     ------> ADC3_IN13
+    PA3     ------> ADC3_IN3
+    */
+    HAL_GPIO_DeInit(GPIOF, GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_10);
+
+    HAL_GPIO_DeInit(GPIOC, GPIO_PIN_0|GPIO_PIN_2|GPIO_PIN_3);
+
+    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_3);
+
+    /* USER CODE BEGIN ADC3_MspDeInit 1 */
+
+    /* USER CODE END ADC3_MspDeInit 1 */
+  }
+
+}
+
+/**
   * @brief ETH MSP Initialization
   * This function configures the hardware resources used in this example
   * @param heth: ETH handle pointer

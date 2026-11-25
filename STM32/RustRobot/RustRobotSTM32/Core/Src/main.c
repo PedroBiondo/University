@@ -32,7 +32,29 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+/* ---------- Pontes H ---------- */
+#define EN_PORT     GPIOF
+#define EN_PINS     (GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15)  /* EN de H1..H4 */
 
+/* Lado DIREITO (H1 + H2 em paralelo) */
+#define CH_DIR_RPWM  TIM_CHANNEL_1   /* PE9  - RSRPWM -> RPWM de H1 e H2 */
+#define CH_DIR_LPWM  TIM_CHANNEL_2   /* PE11 - RSLPWM -> LPWM de H1 e H2 */
+/* Lado ESQUERDO (H3 + H4 em paralelo) */
+#define CH_ESQ_RPWM  TIM_CHANNEL_3   /* PE13 - LSRPWM -> RPWM de H3 e H4 */
+#define CH_ESQ_LPWM  TIM_CHANNEL_4   /* PE14 - LSLPWM -> LPWM de H3 e H4 */
+
+/* Entrada que recebe PWM para ir para FRENTE em cada lado (a outra fica em 0).
+   Para ir para TRAS o codigo inverte o par. */
+#define DIR_FRENTE_PWM   CH_DIR_RPWM
+#define DIR_FRENTE_ZERO  CH_DIR_LPWM
+#define ESQ_FRENTE_PWM   CH_ESQ_LPWM
+#define ESQ_FRENTE_ZERO  CH_ESQ_RPWM
+
+/* ---------- Movimento ---------- */
+#define DUTY_MOV        0.60f    /* 60% na ida e na volta */
+#define RAMPA_MS        300U     /* partida suave 0 -> 60% */
+#define TEMPO_MS        10000U   /* 10 s para frente e 10 s para tras */
+#define PAUSA_MS        500U     /* parado antes de inverter (evita pico de corrente) */
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -60,6 +82,8 @@ ETH_DMADescTypeDef DMATxDscrTab[ETH_TX_DESC_CNT] __attribute__((section(".TxDecr
 
 ETH_TxPacketConfig TxConfig;
 
+ADC_HandleTypeDef hadc3;
+
 ETH_HandleTypeDef heth;
 
 TIM_HandleTypeDef htim1;
@@ -80,13 +104,74 @@ static void MX_ETH_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_USB_OTG_FS_PCD_Init(void);
+static void MX_ADC3_Init(void);
 /* USER CODE BEGIN PFP */
-
+static void Motores_Init(void);
+static void Motores_Mover(int sentido, float duty);
+static void Andar(int sentido, uint32_t tempo_ms);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static const uint32_t canais_pwm[4] = {
+  CH_DIR_RPWM, CH_DIR_LPWM, CH_ESQ_RPWM, CH_ESQ_LPWM
+};
 
+/* Configura os EN (PF12-PF15), liga os 4 canais do TIM1 com duty 0 e habilita as pontes */
+static void Motores_Init(void)
+{
+  GPIO_InitTypeDef g = {0};
+
+  HAL_GPIO_WritePin(EN_PORT, EN_PINS, GPIO_PIN_RESET);   /* pontes desligadas durante a configuracao */
+  g.Pin   = EN_PINS;
+  g.Mode  = GPIO_MODE_OUTPUT_PP;
+  g.Pull  = GPIO_NOPULL;
+  g.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(EN_PORT, &g);                             /* clock do GPIOF ja ligado no MX_GPIO_Init */
+
+  for (int i = 0; i < 4; i++) {
+    __HAL_TIM_SET_COMPARE(&htim1, canais_pwm[i], 0);
+    HAL_TIM_PWM_Start(&htim1, canais_pwm[i]);             /* tambem liga o MOE do TIM1 */
+  }
+
+  HAL_GPIO_WritePin(EN_PORT, EN_PINS, GPIO_PIN_SET);      /* EN = 1 nas 4 pontes */
+}
+
+/* sentido: +1 = frente, -1 = tras, 0 = parar (freio: RPWM = LPWM = 0 com EN = 1)
+   duty: 0.0 a 1.0, igual nos dois lados */
+static void Motores_Mover(int sentido, float duty)
+{
+  if (duty < 0.0f) duty = 0.0f;
+  if (duty > 1.0f) duty = 1.0f;
+
+  uint32_t ccr = (uint32_t)(duty * (float)(__HAL_TIM_GET_AUTORELOAD(&htim1) + 1U));
+
+  for (int i = 0; i < 4; i++) {
+    __HAL_TIM_SET_COMPARE(&htim1, canais_pwm[i], 0);
+  }
+
+  if (sentido > 0) {
+    __HAL_TIM_SET_COMPARE(&htim1, DIR_FRENTE_PWM, ccr);
+    __HAL_TIM_SET_COMPARE(&htim1, ESQ_FRENTE_PWM, ccr);
+  } else if (sentido < 0) {
+    __HAL_TIM_SET_COMPARE(&htim1, DIR_FRENTE_ZERO, ccr);   /* par invertido = tras */
+    __HAL_TIM_SET_COMPARE(&htim1, ESQ_FRENTE_ZERO, ccr);
+  }
+}
+
+/* Anda no sentido pedido por tempo_ms, com partida suave, e para no fim */
+static void Andar(int sentido, uint32_t tempo_ms)
+{
+  uint32_t t0 = HAL_GetTick();
+  uint32_t dt;
+
+  while ((dt = HAL_GetTick() - t0) < tempo_ms) {
+    float duty = (dt >= RAMPA_MS) ? DUTY_MOV : DUTY_MOV * (float)dt / (float)RAMPA_MS;
+    Motores_Mover(sentido, duty);
+    HAL_Delay(1);
+  }
+  Motores_Mover(0, 0.0f);
+}
 /* USER CODE END 0 */
 
 /**
@@ -125,8 +210,22 @@ int main(void)
   MX_TIM1_Init();
   MX_USART3_UART_Init();
   MX_USB_OTG_FS_PCD_Init();
+  MX_ADC3_Init();
   /* USER CODE BEGIN 2 */
+  Motores_Init();                                     /* EN = 1, PWM = 0 (parado) */
+  HAL_Delay(1000);                                    /* 1 s depois de ligar, para tirar a mao */
 
+  HAL_GPIO_WritePin(GPIOB, LD2_Pin, GPIO_PIN_SET);    /* azul = frente */
+  Andar(+1, TEMPO_MS);                                /* 10 s para frente */
+  HAL_GPIO_WritePin(GPIOB, LD2_Pin, GPIO_PIN_RESET);
+
+  HAL_Delay(PAUSA_MS);                                /* parado 0,5 s antes de inverter */
+
+  HAL_GPIO_WritePin(GPIOB, LD3_Pin, GPIO_PIN_SET);    /* vermelho = tras */
+  Andar(-1, TEMPO_MS);                                /* 10 s para tras */
+  HAL_GPIO_WritePin(GPIOB, LD3_Pin, GPIO_PIN_RESET);
+
+  HAL_GPIO_WritePin(GPIOB, LD1_Pin, GPIO_PIN_SET);    /* verde = terminou */
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -156,7 +255,7 @@ void SystemClock_Config(void)
   /** Configure the main internal regulator output voltage
   */
   __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -166,9 +265,9 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 4;
-  RCC_OscInitStruct.PLL.PLLN = 96;
+  RCC_OscInitStruct.PLL.PLLN = 216;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 4;
+  RCC_OscInitStruct.PLL.PLLQ = 9;
   RCC_OscInitStruct.PLL.PLLR = 2;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -188,13 +287,128 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_7) != HAL_OK)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC3_Init(void)
+{
+
+  /* USER CODE BEGIN ADC3_Init 0 */
+
+  /* USER CODE END ADC3_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC3_Init 1 */
+
+  /* USER CODE END ADC3_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc3.Instance = ADC3;
+  hadc3.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc3.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc3.Init.ScanConvMode = ADC_SCAN_ENABLE;
+  hadc3.Init.ContinuousConvMode = DISABLE;
+  hadc3.Init.DiscontinuousConvMode = DISABLE;
+  hadc3.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc3.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc3.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc3.Init.NbrOfConversion = 8;
+  hadc3.Init.DMAContinuousRequests = DISABLE;
+  hadc3.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  if (HAL_ADC_Init(&hadc3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_3;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_144CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_10;
+  sConfig.Rank = ADC_REGULAR_RANK_2;
+  if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_13;
+  sConfig.Rank = ADC_REGULAR_RANK_3;
+  if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_9;
+  sConfig.Rank = ADC_REGULAR_RANK_4;
+  if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_15;
+  sConfig.Rank = ADC_REGULAR_RANK_5;
+  if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_8;
+  sConfig.Rank = ADC_REGULAR_RANK_6;
+  if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_12;
+  sConfig.Rank = ADC_REGULAR_RANK_7;
+  if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_14;
+  sConfig.Rank = ADC_REGULAR_RANK_8;
+  if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC3_Init 2 */
+
+  /* USER CODE END ADC3_Init 2 */
+
 }
 
 /**
@@ -422,6 +636,7 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
@@ -434,6 +649,9 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(USB_PowerSwitchOn_GPIO_Port, USB_PowerSwitchOn_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(QTR_LEDON_GPIO_Port, QTR_LEDON_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : USER_Btn_Pin */
   GPIO_InitStruct.Pin = USER_Btn_Pin;
@@ -460,6 +678,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(USB_OverCurrent_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : QTR_LEDON_Pin */
+  GPIO_InitStruct.Pin = QTR_LEDON_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(QTR_LEDON_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
